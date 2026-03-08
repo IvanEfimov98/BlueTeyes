@@ -1,5 +1,7 @@
 package com.connect.blueteyes
 
+import androidx.compose.runtime.livedata.observeAsState
+import android.bluetooth.BluetoothDevice
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
