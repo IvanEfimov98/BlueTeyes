@@ -4,7 +4,6 @@ import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
-import android.app.Notification
 
 class NotificationListener : NotificationListenerService() {
 
@@ -20,7 +19,7 @@ class NotificationListener : NotificationListenerService() {
 
         Log.d("NotifListener", "Пакет: $packageName, Title: $title, Text: $text")
 
-        // Вызываем колбэк, если он установлен (передадим текст уведомления)
+        // Вызываем колбэк, передаём пакет и текст
         onNotificationPostedListener?.invoke(packageName, text)
     }
 
