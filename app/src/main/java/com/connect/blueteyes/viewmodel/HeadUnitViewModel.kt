@@ -12,9 +12,11 @@ import com.connect.blueteyes.service.BluetoothClient
 import com.connect.blueteyes.tts.TTSManager
 import com.connect.blueteyes.utils.DataStoreManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.DataInputStream
 import java.io.IOException
@@ -30,15 +32,12 @@ class HeadUnitViewModel(application: Application) : AndroidViewModel(application
     private var inputStream: DataInputStream? = null
     private var receiveJob: Job? = null
 
-    // Список всех сопряжённых устройств
     private val _allDevices = MutableStateFlow<List<BluetoothDevice>>(emptyList())
     val allDevices: StateFlow<List<BluetoothDevice>> = _allDevices.asStateFlow()
 
-    // Список "знакомых" устройств (с которыми уже соединялись)
     private val _knownDevices = MutableStateFlow<List<BluetoothDeviceInfo>>(emptyList())
     val knownDevices: StateFlow<List<BluetoothDeviceInfo>> = _knownDevices.asStateFlow()
 
-    // Статус подключения
     private val _connectionStatus = MutableStateFlow("Отключено")
     val connectionStatus: StateFlow<String> = _connectionStatus.asStateFlow()
 
@@ -60,16 +59,14 @@ class HeadUnitViewModel(application: Application) : AndroidViewModel(application
         _isScanning.value = false
     }
 
-    // Получить отсортированный список для отображения
-    fun getDisplayDevices(): List<Pair<Boolean, BluetoothDevice>> { // Pair: isKnown, device
+    // Получить отсортированный список для отображения: сначала знакомые, потом новые.
+    // Внутри групп сортировка по имени устройства.
+    fun getDisplayDevices(): List<Pair<Boolean, BluetoothDevice>> {
         val knownAddresses = _knownDevices.value.map { it.address }.toSet()
-        return _allDevices.value.map { device ->
-            val isKnown = device.address in knownAddresses
-            isKnown to device
-        }.sortedByDescending { (isKnown, device) ->
-            // Сначала известные (true), потом новые (false). Внутри групп сортировка по имени.
-            isKnown to device.name
-        }
+        return _allDevices.value
+            .map { device -> Pair(device.address in knownAddresses, device) }
+            .sortedWith(compareBy<Pair<Boolean, BluetoothDevice>> { !it.first } // сначала true (знакомые)
+                .thenBy { it.second.name ?: "" }) // затем по имени
     }
 
     fun connectToDevice(device: BluetoothDevice) {
@@ -80,7 +77,6 @@ class HeadUnitViewModel(application: Application) : AndroidViewModel(application
                 inputStream = DataInputStream(socket.inputStream)
                 Log.d("HeadUnitViewModel", "Подключено к серверу")
                 _connectionStatus.value = "Подключено"
-                // Сохраняем устройство в список известных
                 saveKnownDevice(device)
                 startListening()
             } catch (e: IOException) {
@@ -101,11 +97,10 @@ class HeadUnitViewModel(application: Application) : AndroidViewModel(application
                 isAutoConnect = false,
                 lastConnectedTimestamp = System.currentTimeMillis()
             )
-            currentKnown.add(0, newDevice) // Новые сверху
+            currentKnown.add(0, newDevice)
             _knownDevices.value = currentKnown
             dataStore.saveKnownDevices(currentKnown)
         } else {
-            // Обновляем время последнего подключения
             val updated = currentKnown.map {
                 if (it.address == device.address) it.copy(lastConnectedTimestamp = System.currentTimeMillis()) else it
             }.sortedByDescending { it.lastConnectedTimestamp }
@@ -114,7 +109,6 @@ class HeadUnitViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    // Обновить флаг автоподключения для устройства
     fun setAutoConnect(deviceAddress: String, autoConnect: Boolean) {
         val updated = _knownDevices.value.map {
             if (it.address == deviceAddress) it.copy(isAutoConnect = autoConnect) else it
@@ -129,7 +123,6 @@ class HeadUnitViewModel(application: Application) : AndroidViewModel(application
                 try {
                     val message = inputStream?.readUTF()
                     message?.let {
-                        // Озвучиваем полученное сообщение
                         ttsManager.speak(it)
                     }
                 } catch (e: IOException) {

@@ -25,7 +25,6 @@ class PhoneViewModel(application: Application) : AndroidViewModel(application) {
     private val context = getApplication<Application>()
     private val dataStore = DataStoreManager(context)
 
-    // Состояние Bluetooth-сервера
     private var bluetoothServer: BluetoothServer? = null
     private var currentSocket: BluetoothSocket? = null
     private var outputStream: DataOutputStream? = null
@@ -33,11 +32,9 @@ class PhoneViewModel(application: Application) : AndroidViewModel(application) {
     private val _isServerRunning = MutableStateFlow(false)
     val isServerRunning: StateFlow<Boolean> = _isServerRunning.asStateFlow()
 
-    // Список всех установленных приложений
     private val _allApps = MutableStateFlow<List<AppInfo>>(emptyList())
     val allApps: StateFlow<List<AppInfo>> = _allApps.asStateFlow()
 
-    // История подключений
     private val _connectionHistory = MutableStateFlow<List<HistoryRecord>>(emptyList())
     val connectionHistory: StateFlow<List<HistoryRecord>> = _connectionHistory.asStateFlow()
 
@@ -47,7 +44,6 @@ class PhoneViewModel(application: Application) : AndroidViewModel(application) {
         setupNotificationListener()
     }
 
-    // Загружаем список приложений, которые могут показывать уведомления
     private fun loadInstalledApps() {
         viewModelScope.launch(Dispatchers.IO) {
             val pm = context.packageManager
@@ -58,12 +54,10 @@ class PhoneViewModel(application: Application) : AndroidViewModel(application) {
             val apps = resolveInfos.map { resolveInfo ->
                 val packageName = resolveInfo.activityInfo.packageName
                 val appName = resolveInfo.loadLabel(pm).toString()
-                val icon = resolveInfo.loadIcon(pm)
                 AppInfo(
                     packageName = packageName,
                     appName = appName,
-                    isSelected = packageName in selectedPackages,
-                    icon = icon
+                    isSelected = packageName in selectedPackages
                 )
             }.sortedBy { it.appName }
 
@@ -71,7 +65,6 @@ class PhoneViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Сохраняем выбор приложений
     fun updateAppSelection(app: AppInfo, selected: Boolean) {
         val updatedList = _allApps.value.map {
             if (it.packageName == app.packageName) it.copy(isSelected = selected) else it
@@ -80,12 +73,10 @@ class PhoneViewModel(application: Application) : AndroidViewModel(application) {
         dataStore.saveSelectedApps(updatedList)
     }
 
-    // Загружаем историю
     private fun loadHistory() {
         _connectionHistory.value = dataStore.loadHistory()
     }
 
-    // Добавляем запись в историю
     fun addConnectionRecord(deviceName: String, deviceAddress: String) {
         val record = HistoryRecord(deviceName, deviceAddress, System.currentTimeMillis())
         val currentList = _connectionHistory.value.toMutableList()
@@ -95,10 +86,8 @@ class PhoneViewModel(application: Application) : AndroidViewModel(application) {
         dataStore.saveHistory(currentList)
     }
 
-    // Настройка колбэка от сервиса уведомлений
     private fun setupNotificationListener() {
         NotificationListener.onNotificationPostedListener = { packageName, text ->
-            // Проверяем, выбрано ли это приложение
             val isSelected = _allApps.value.find { it.packageName == packageName }?.isSelected ?: false
             if (isSelected && text != null) {
                 sendNotificationToHeadUnit(text)
@@ -106,7 +95,6 @@ class PhoneViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Отправка текста на магнитолу
     private fun sendNotificationToHeadUnit(text: String) {
         if (outputStream == null) {
             Log.e("PhoneViewModel", "Нет подключения к магнитоле")
@@ -122,7 +110,6 @@ class PhoneViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Управление сервером
     fun startServer() {
         bluetoothServer = BluetoothServer { socket ->
             currentSocket = socket
@@ -153,7 +140,6 @@ class PhoneViewModel(application: Application) : AndroidViewModel(application) {
         _isServerRunning.value = false
     }
 
-    // Открытие настроек доступа к уведомлениям
     fun openNotificationAccess() {
         val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
